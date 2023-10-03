@@ -1,0 +1,3 @@
+The program craetes a hierarchy of processes from the main one. 
+When the fork() is terminated, the number of processes id dublicated. 
+Therefore, the overall number of processes is 2 in a power of n
