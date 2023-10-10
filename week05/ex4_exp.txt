@@ -1,0 +1,5 @@
+As in the previous task, the dependence of the number of threads and running 
+time of the program is inversely proportional.
+There is a minor difference in run time between ex3.c and ex4.c tasks
+But with a great number of threads run time of programm 4 is bigger than for program 3.
+It can be explained by the often mutex use.

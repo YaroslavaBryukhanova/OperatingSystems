@@ -1,0 +1,2 @@
+The more the threads we use in our programm, the less the run time is.
+So the dependence of the number of threads and running time of the program is inversely proportional.
