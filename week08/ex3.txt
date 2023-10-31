@@ -1,0 +1,1 @@
+While the programm is running, si and so are equal to 0 as nothing is swapped
