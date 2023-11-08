@@ -14,6 +14,7 @@ struct PTE {
     int referenced;
     pid_t mmu_pid;
     int disk_accesses;
+    int replacement;
 };
 
 void handle_loaded_page();
@@ -26,7 +27,7 @@ struct PTE *table;
 
 int main(int argc, char *argv[]) {
     if (argc < 4) {
-        printf(stderr, "You need to enter number of pages, reference string, pager pid\n");
+        fprintf(stderr, "You need to enter number of pages, reference string, pager pid\n");
         exit(EXIT_FAILURE);
     }
     pages_number = atoi(argv[1]);
@@ -39,7 +40,6 @@ int main(int argc, char *argv[]) {
 
     int fd = open("/tmp/ex2/pagetable", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
     ftruncate(fd, sizeof(struct PTE)* pages_number);
-    table = mmap();
     table = (struct PTE *)mmap(NULL, pages_number * sizeof(struct PTE), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     
     if(table==MAP_FAILED) {
@@ -51,9 +51,12 @@ int main(int argc, char *argv[]) {
     printf("Initialized page table\n");
     printf("Page table:\n");
     for(int i=0; i< pages_number; i++) {
-        printf("Page %d ---> valid=%d, frame=%d, dirty=%d, referenced=\n",i, table[i].valid, table[i].frame, table[i].dirty, table[i].referenced);
+        printf("Page %d ---> valid=%d, frame=%d, dirty=%d, referenced=%d\n",i, table[i].valid, table[i].frame, table[i].dirty, table[i].referenced);
     }
     printf("-------------------------\n");
+
+    int hit = 0;
+    int miss = 0;
     for (int i=0; i<strlen(reference_string); i+=2) {
         char mode = reference_string[i];
         int page = reference_string[i+1] - '0';
@@ -63,13 +66,15 @@ int main(int argc, char *argv[]) {
             if (!table[page].valid) {
                 printf("It is not a valid page --> page fault\n");
                 handle_nonvalid_page(page);
+                miss++;
             } else {
                 printf("It is a valid page\n");
+                hit++;
             }
         }
         if (mode == 'W') {
             printf("Write Request for page %d\n", page);    
-            page_table[page].dirty = true;
+            table[page].dirty = true;
         } else {
             printf("Read Request for page %d\n", page);
         }
@@ -81,6 +86,7 @@ int main(int argc, char *argv[]) {
         printf("-------------------------\n");
     }
     printf("Done all requests.\n");
+    printf("Hit ratio: %f\n", (double)hit/(double)(miss+hit));
 
     munmap(table, pages_number * sizeof(struct PTE));
     close(fd);

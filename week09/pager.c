@@ -7,10 +7,9 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <limits.h>
 
 #define SIZE 8
-
-void sigusr1_handler();
 
 struct PTE {
     bool valid;
@@ -19,12 +18,13 @@ struct PTE {
     int referenced;
     pid_t mmu_pid;
     int disk_accesses;
+    int replacement;
 };
 
 int pages_number;
 int frames;
-int max_pages = 100;
-int max_frames = 100;
+int max_pages = 1000;
+int max_frames = 1000;
 struct PTE *table;
 char** disk;
 int current_frame = 0;
@@ -33,17 +33,38 @@ int disk_accesses = 0;
 char *reference_string;
 
 
+void sigusr1_handler();
+int random_rep(struct PTE* table);
+int aging(struct PTE* table);
+int nfu(struct PTE* table);
+
+
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        fprintf(stderr, "You need to enter number of pages, number of frames\n");
+    if (argc < 4) {
+        fprintf(stderr, "You need to enter number of pages, number of frames and page replacement algorithm\n");
         exit(EXIT_FAILURE);
     }
 
     pages_number = atoi(argv[1]);
     frames = atoi(argv[2]);
+    char *replacement_alg = argv[3];
+    int replacement_alg_number = -1;
+
+    if(strcmp(replacement_alg, "random")==0){
+        printf("Selected algorithm is random page replacement\n");
+        replacement_alg_number = 0;
+    }
+    else if(strcmp(replacement_alg, "nfu")==0) {
+        printf("Selected algorithm is NFU page replacement\n");
+        replacement_alg_number = 1;
+    }
+    else if(strcmp(replacement_alg, "aging")==0){
+        printf("Selected algorithm is aging page replacement\n");
+        replacement_alg_number = 2;
+    }
 
     pid_t pid = getpid();
-    FILE* file = fopen("/tmp/ex2/pager_pid", "w");
+    FILE* file = fopen("/media/sf_OS/week09/tmp/ex2/pager_pid", "w");
     fprintf(file, "%d", pid);
     fclose(file);
 
@@ -53,13 +74,13 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Create a page table\n");
-    int fd = open("/tmp/ex2/pagetable", O_RDWR | O_CREAT);
+    int fd = open("/media/sf_OS/week09/tmp/ex2/pagetable", O_RDWR | O_CREAT);
     
-    printf("Shorten file to the size of a page table");
+    printf("Shorten file to the size of a page table\n");
     ftruncate(fd, sizeof(struct PTE) * pages_number);
 
-    printf("Map page table to the memory");
-    table = mmap(NULL, sizeof(struct PTE) * pages_number, PROT_READ | PROT_WRITE, MAP_SHARED, page_table_fd, 0);
+    printf("Map page table to the memory\n");
+    table = mmap(NULL, sizeof(struct PTE) * pages_number, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (table == MAP_FAILED) {
         perror("mmap failed");
         exit(EXIT_FAILURE);
@@ -74,7 +95,11 @@ int main(int argc, char *argv[]) {
         table[i].referenced = 0;
         printf("Page %d---> valid=%d, frame=%d, dirty=%d, referenced=%d\n", i, table[i].valid, table[i].frame, table[i].dirty, table[i].referenced);
     }
+
+    table->replacement = replacement_alg_number;
     printf("Create RAM\n");
+
+
     RAM = malloc(sizeof(char *) * frames);
     if (RAM == NULL) {
         perror("malloc");
@@ -159,18 +184,29 @@ void sigusr1_handler() {
                 printf("A disk access request from MMU Process (pid=%d)\n", table->mmu_pid);
                 printf("Page %d is referenced\n", i);
                 table[i].referenced = 0;
+
                 printf("We do not have free frames in RAM\n");
                 int victim_page = -1;
-                while (1) {
-                    int random_index = rand() % pages_number;
-                    if (table[random_index].valid == 1) {
-                        victim_page = random_index;
-                        break;
-                    }
+                int page_replacement = table->replacement;
+                if(page_replacement == 0){
+                    victim_page = random_rep(table);
                 }
+                else if (page_replacement == 1) {
+                    victim_page = nfu(table);
+                }
+                else if(page_replacement ==2){
+                    victim_page = aging(table);
+                }
+                // while (1) {
+                //     int random_index = rand() % pages_number;
+                //     if (table[random_index].valid == 1) {
+                //         victim_page = random_index;
+                //         break;
+                //     }
+                // }
                 printf("We choose page %d as a victim page\n", victim_page);
                 printf("Replace/Evict it with page %d to be allocated to frame %d\n", i, table[victim_page].frame);
-                printf("Copy data from the disk (page=%d) to RAM (frame=%d)\n", i, page_table[victim_page].frame);
+                printf("Copy data from the disk (page=%d) to RAM (frame=%d)\n", i, table[victim_page].frame);
                 RAM[table[victim_page].frame][0] = '\0';
                 strcpy(RAM[table[victim_page].frame], disk[i]);
 
@@ -217,4 +253,46 @@ void sigusr1_handler() {
 
         exit(EXIT_SUCCESS);
     }
+}
+
+int random_rep(struct PTE* table) {
+    int victim_page = -1;
+    while(1) {
+        int random_index = rand() % pages_number;
+        if(table[random_index].valid == 1) {
+            victim_page = random_index;
+            break;
+        }
+    }
+    return victim_page;
+}
+
+int nfu(struct PTE* table) {
+    int min_count = INT_MAX;
+    int evicted = -1;
+    for(int i=0; i<pages_number; i++) {
+        if(table[i].valid) {
+            if(table[i].referenced < min_count) {
+                min_count = table[i].referenced;
+                evicted = i;
+            }
+        }
+    }
+    return evicted;
+}
+
+int aging(struct PTE* table) {
+    int min_count = INT_MAX;
+    int evicted = -1;
+    for(int i=0; i<pages_number; i++) {
+        if(table[i].valid) {
+            table[i].referenced = (table[i].referenced >> 1) | (table[i].referenced << 7);
+            
+            if(table[i].referenced < min_count) {
+                min_count = table[i].referenced;
+                evicted = i;
+            }
+        }
+    }
+    return evicted;
 }
