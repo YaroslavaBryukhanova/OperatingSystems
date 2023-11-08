@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
     ftruncate(fd, sizeof(struct PTE) * pages_number);
 
     printf("Map page table to the memory");
-    table = mmap(NULL, sizeof(struct PTE) * pages_number, PROT_READ | PROT_WRITE, MAP_SHARED, page_table_fd, 0);
+    table = mmap(NULL, sizeof(struct PTE) * pages_number, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (table == MAP_FAILED) {
         perror("mmap failed");
         exit(EXIT_FAILURE);
@@ -170,7 +170,7 @@ void sigusr1_handler() {
                 }
                 printf("We choose page %d as a victim page\n", victim_page);
                 printf("Replace/Evict it with page %d to be allocated to frame %d\n", i, table[victim_page].frame);
-                printf("Copy data from the disk (page=%d) to RAM (frame=%d)\n", i, page_table[victim_page].frame);
+                printf("Copy data from the disk (page=%d) to RAM (frame=%d)\n", i, table[victim_page].frame);
                 RAM[table[victim_page].frame][0] = '\0';
                 strcpy(RAM[table[victim_page].frame], disk[i]);
 
