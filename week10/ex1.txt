@@ -1,0 +1,2 @@
+monitor.c does not react to the actions of ex1.c. However, it interacts with all the shell scripts,
+as well as ex1_test.sh
