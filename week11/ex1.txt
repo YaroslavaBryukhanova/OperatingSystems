@@ -35,6 +35,6 @@ tmp
 lib
 
 
-The main difference is that one displays what is in lofsdisk, the other displays what is in the root folder.
-The variation in file counts arises from the fact that `lofsdisk` represents an artificial file system created within the root.
+The main difference is that one displays what is located inside lofsdisk, the other displays what is in the root folder.
+`lofsdisk` represents an artificial file system created within the root.
 
